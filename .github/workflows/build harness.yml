@@ -1,4 +1,9 @@
+<<<<<<< HEAD
 name: Deploy React Web App
+=======
+name: build and deploy to linux
+
+>>>>>>> 86d7d22 (hello updated)
 on:
   push:
     branches:
