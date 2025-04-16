@@ -1,0 +1,35 @@
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Copy env_ottl to .env
+        run: cp env_ottl .env
+
+      - name: Build the project
+        run: npm run build
+
+      - name: Deploy to Remote Linux Server via SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            cd /home/ubuntu/build
+            git pull origin main
+            cp env_ottl .env
+            npm install
+            npm run build
+            pm2 restart harness || pm2 start npm --name "harness" -- start
