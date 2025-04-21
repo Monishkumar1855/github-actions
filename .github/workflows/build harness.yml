@@ -1,41 +1,54 @@
-name: build and deploy on linux
+name: Deploy React Web App
 on:
   push:
     branches:
       - main
-
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
-
-    steps:
+     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Copy env_ottl to .env
-        run: cp env_ottl .env
-
-      - name: Build the project
-        run: npm run build
-
-      - name: Deploy to Remote Linux Server via SSH
+        uses: actions/checkout@v4
+      - name: Backup deployed folder on server
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
+            echo "Backing up current app"
+            timestamp=$(date +%F_%H-%M-%S)
+            mkdir -p /home/ubuntu/app_backup_$timestamp
+            rsync -avz /home/ubuntu/app/ /home/ubuntu/app_backup_$timestamp/
+      - name: Sync source code to server
+        uses: actions/rsync@v2
+        with:
+          switches: -avz --exclude=node_modules --exclude=build
+          ssh_private_key: ${{ secrets.SERVER_SSH_KEY }}
+          path: ./
+          remote_path: /home/ubuntu/build/
+          remote_host: ${{ secrets.SERVER_IP }}
+          remote_user: ${{ secrets.SERVER_USER }}
+      - name: Install dependencies and build app on server
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            echo "Installing dependencies and building app"
             cd /home/ubuntu/build
-            git pull origin main
             cp env_ottl .env
             npm install
             npm run build
-            pm2 restart harness || pm2 start npm --name "harness" -- start
+      - name: Deploy build to app directory
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            echo "Deploying new build to app folder"
+            rm -rf /home/ubuntu/app/*
+            cp -r /home/ubuntu/build/build/* /home/ubuntu/app/
+
